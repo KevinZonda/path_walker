@@ -129,3 +129,125 @@ class TestDoublestar:
         assert 'beach' in names
         assert 'sunset' in names
         assert 'image' in names
+
+
+# ---------------------------------------------------------------------------
+# Inline capture group & literal-content capture
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def inline_tree(tmp_path):
+    """
+    tmp_path/
+      art/
+        abc.png          <- matches {*}/ab{c}.png  (captures art, c)
+        abd.png          <- does NOT match {*}/ab{c}.png  (d ≠ c)
+        ababa/
+          z.png          <- matches {*}/ababa/{z.png} (captures art, z.png)
+          w.png          <- does NOT match {*}/ababa/{z.png} (w.png ≠ z.png)
+      raw/
+        abc.png          <- matches {*}/ab{c}.png  (captures raw, c)
+        ababa/
+          z.png          <- matches {*}/ababa/{z.png} (captures raw, z.png)
+          z_extra.png    <- does NOT match (not exactly z.png)
+    """
+    def mk(*parts):
+        p = tmp_path.joinpath(*parts)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text('')
+
+    mk('art', 'abc.png')
+    mk('art', 'abd.png')
+    mk('art', 'ababa', 'z.png')
+    mk('art', 'ababa', 'w.png')
+    mk('raw', 'abc.png')
+    mk('raw', 'ababa', 'z.png')
+    mk('raw', 'ababa', 'z_extra.png')
+
+    return tmp_path
+
+
+class TestInlineCaptureGroup:
+    """
+    {*}/ab{c}.png
+
+    Regex: ^([^/]+)/ab(c)\\.png$
+
+    The second capture {c} contains only the literal 'c', so it matches
+    files named exactly 'abc.png' and captures the character 'c'.
+    Files like 'abd.png' do not match.
+    Returns a 2D list: [dir, 'c'].
+    """
+
+    def test_matches_abc_png(self, inline_tree):
+        pattern = str(inline_tree) + '/{*}/ab{c}.png'
+        results = walk(pattern)
+        pairs = {tuple(r) for r in results}
+        assert ('art', 'c') in pairs
+        assert ('raw', 'c') in pairs
+
+    def test_does_not_match_abd_png(self, inline_tree):
+        pattern = str(inline_tree) + '/{*}/ab{c}.png'
+        results = walk(pattern)
+        dirs = {r[0] for r in results}
+        # abd.png only exists under art/ — but it should not be captured
+        # (all results must come from abc.png files)
+        assert all(r[1] == 'c' for r in results)
+
+    def test_exact_count(self, inline_tree):
+        # Only art/abc.png and raw/abc.png qualify
+        pattern = str(inline_tree) + '/{*}/ab{c}.png'
+        results = walk(pattern)
+        assert len(results) == 2
+
+    def test_result_shape(self, inline_tree):
+        pattern = str(inline_tree) + '/{*}/ab{c}.png'
+        results = walk(pattern)
+        for r in results:
+            assert isinstance(r, list)
+            assert len(r) == 2
+
+
+class TestLiteralContentCapture:
+    """
+    {*}/ababa/{z.png}
+
+    Regex: ^([^/]+)/ababa/(z\\.png)$
+
+    The second capture {z.png} — the dot is escaped inside _glob_frag_to_regex,
+    so it matches only the literal filename 'z.png'.
+    Files like 'w.png' or 'z_extra.png' are excluded.
+    Returns a 2D list: [dir, 'z.png'].
+    """
+
+    def test_matches_z_png(self, inline_tree):
+        pattern = str(inline_tree) + '/{*}/ababa/{z.png}'
+        results = walk(pattern)
+        pairs = {tuple(r) for r in results}
+        assert ('art', 'z.png') in pairs
+        assert ('raw', 'z.png') in pairs
+
+    def test_does_not_match_w_png(self, inline_tree):
+        pattern = str(inline_tree) + '/{*}/ababa/{z.png}'
+        results = walk(pattern)
+        assert all(r[1] == 'z.png' for r in results)
+
+    def test_does_not_match_z_extra_png(self, inline_tree):
+        # z_extra.png has more chars after 'z' before '.png'
+        pattern = str(inline_tree) + '/{*}/ababa/{z.png}'
+        results = walk(pattern)
+        filenames = {r[1] for r in results}
+        assert 'z_extra.png' not in filenames
+
+    def test_exact_count(self, inline_tree):
+        # art/ababa/z.png and raw/ababa/z.png
+        pattern = str(inline_tree) + '/{*}/ababa/{z.png}'
+        results = walk(pattern)
+        assert len(results) == 2
+
+    def test_result_shape(self, inline_tree):
+        pattern = str(inline_tree) + '/{*}/ababa/{z.png}'
+        results = walk(pattern)
+        for r in results:
+            assert isinstance(r, list)
+            assert len(r) == 2
