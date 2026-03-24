@@ -153,6 +153,31 @@ walk_first('./docs/{*}.pdf')
 
 ---
 
+## Windows 路径说明
+
+path_walker 在内部统一使用 `/` 作为路径分隔符。
+
+**输入 pattern**：`/` 和 `\\` 均可，库会自动转换。
+
+```python
+walk('C:/Users/Kevin/{*}/image.jpg')      # ✓
+walk('C:\\Users\\Kevin\\{*}\\image.jpg')  # ✓ 等价
+```
+
+**输出结果**：无论运行在何种平台，返回值始终使用 `/`。
+
+```python
+# 1 个捕获组 -> 捕获内容本身，不含分隔符
+walk('C:/Users/{*}/image.jpg')
+# -> ['Kevin']
+
+# 0 个捕获组 -> 完整路径，用 / 分隔（非 \）
+walk('C:/Users/Kevin/docs/*.pdf')
+# -> ['C:/Users/Kevin/docs/report.pdf']
+```
+
+---
+
 ## 项目结构
 
 ```
