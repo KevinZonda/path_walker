@@ -3,7 +3,7 @@ requires = ["setuptools>=42"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "path-walker"
+name = "kevinzonda-path-walker"
 version = "0.1.0"
 description = "Glob-like path matching with {} capture groups"
 readme = "README.md"
