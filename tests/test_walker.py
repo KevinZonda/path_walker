@@ -251,3 +251,100 @@ class TestLiteralContentCapture:
         for r in results:
             assert isinstance(r, list)
             assert len(r) == 2
+
+
+# ---------------------------------------------------------------------------
+# bracket="[]" tests
+# ---------------------------------------------------------------------------
+
+class TestSquareBracketSingleCapture:
+    def test_dirs_containing_image(self, tree):
+        pattern = str(tree) + '/[*]/image.jpg'
+        results = walk(pattern, bracket="[]")
+        assert results == ['docs']
+
+    def test_no_match(self, tree):
+        pattern = str(tree) + '/photos/[*].jpg'
+        results = walk(pattern, bracket="[]")
+        assert results == []
+
+
+class TestSquareBracketTwoCaptures:
+    def test_two_captures(self, tree):
+        pattern = str(tree) + '/photos/[*]/[*].jpg'
+        results = walk(pattern, bracket="[]")
+        assert len(results) == 3
+        names = {tuple(r) for r in results}
+        assert ('2023', 'holiday') in names
+        assert ('2023', 'beach') in names
+        assert ('2024', 'sunset') in names
+
+
+class TestSquareBracketMultiLevel:
+    def test_star_slash_bbb(self, tree):
+        pattern = str(tree) + '/data/[*/bbb]'
+        results = walk(pattern, bracket="[]")
+        assert set(results) == {'a/bbb', 'b/bbb'}
+
+
+class TestSquareBracketNoCapture:
+    def test_no_capture_returns_paths(self, tree):
+        pattern = str(tree) + '/docs/*.pdf'
+        results = walk(pattern, bracket="[]")
+        assert len(results) == 1
+        assert results[0].endswith('report.pdf')
+
+
+class TestSquareBracketWalkFirst:
+    def test_first(self, tree):
+        pattern = str(tree) + '/docs/[*].pdf'
+        result = walk_first(pattern, bracket="[]")
+        assert result == 'report'
+
+    def test_first_no_match(self, tree):
+        result = walk_first(str(tree) + '/nonexistent/[*].jpg', bracket="[]")
+        assert result is None
+
+
+class TestSquareBracketDoublestar:
+    def test_doublestar_capture(self, tree):
+        pattern = str(tree) + '/**/[*].jpg'
+        results = walk(pattern, bracket="[]")
+        names = set(results)
+        assert 'holiday' in names
+        assert 'beach' in names
+        assert 'sunset' in names
+        assert 'image' in names
+
+
+class TestCurlyBraceLiteralWithSquareBracket:
+    """When bracket="[]", curly braces in paths are treated as literals."""
+
+    @pytest.fixture()
+    def curly_tree(self, tmp_path):
+        """
+        tmp_path/
+          {data}/
+            report.csv
+          normal/
+            report.csv
+        """
+        def mk(*parts):
+            p = tmp_path.joinpath(*parts)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text('')
+
+        mk('{data}', 'report.csv')
+        mk('normal', 'report.csv')
+        return tmp_path
+
+    def test_literal_curly_in_path(self, curly_tree):
+        pattern = str(curly_tree) + '/{data}/[*].csv'
+        results = walk(pattern, bracket="[]")
+        assert results == ['report']
+
+    def test_literal_curly_not_captured(self, curly_tree):
+        pattern = str(curly_tree) + '/{data}/*.csv'
+        results = walk(pattern, bracket="[]")
+        assert len(results) == 1
+        assert results[0].endswith('{data}/report.csv')

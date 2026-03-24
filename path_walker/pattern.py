@@ -6,6 +6,11 @@ Syntax:
   **   - matches zero or more path segments
   {P}  - capture group: matches pattern P and returns the matched portion
          P may itself contain *, **, and '/' (multi-level capture)
+  [P]  - same as {P} when bracket="[]" is used
+
+The capture bracket style is configurable via the ``bracket`` parameter
+(default ``"{}"``).  Only the chosen bracket pair is treated as capture
+delimiters; the other pair is treated as literal characters.
 
 Examples:
   /{*}/image.jpg     -> capture single dir that contains image.jpg
@@ -16,16 +21,17 @@ Examples:
 import re
 
 
-def _find_close_brace(s: str, open_pos: int) -> int:
+def _find_close_brace(s: str, open_pos: int,
+                      open_char: str = '{', close_char: str = '}') -> int:
     depth = 0
     for i in range(open_pos, len(s)):
-        if s[i] == '{':
+        if s[i] == open_char:
             depth += 1
-        elif s[i] == '}':
+        elif s[i] == close_char:
             depth -= 1
             if depth == 0:
                 return i
-    raise ValueError(f"Unmatched '{{' in pattern: {s!r}")
+    raise ValueError(f"Unmatched {open_char!r} in pattern: {s!r}")
 
 
 def _glob_frag_to_regex(frag: str) -> str:
@@ -51,13 +57,21 @@ def _glob_frag_to_regex(frag: str) -> str:
     return ''.join(result)
 
 
-def pattern_to_regex(pattern: str):
+def pattern_to_regex(pattern: str, bracket: str = "{}"):
     """
     Convert a path_walker pattern to a (base_dir, compiled_regex, n_captures) tuple.
 
-    The regex has one capture group per {} in the pattern.
+    The regex has one capture group per bracket pair in the pattern.
     base_dir is the longest literal prefix (no wildcards, no captures).
+
+    Parameters
+    ----------
+    bracket : str
+        Two-character string whose first character is the opening bracket and
+        second is the closing bracket.  ``"{}"`` (default) or ``"[]"``.
     """
+    open_char, close_char = bracket[0], bracket[1]
+
     s = pattern.replace('\\', '/')
     n = len(s)
     regex_parts = []
@@ -67,8 +81,8 @@ def pattern_to_regex(pattern: str):
     i = 0
     while i < n:
         # Capture group
-        if s[i] == '{':
-            j = _find_close_brace(s, i)
+        if s[i] == open_char:
+            j = _find_close_brace(s, i, open_char, close_char)
             inner = s[i+1:j]
             regex_parts.append('(' + _glob_frag_to_regex(inner) + ')')
             n_caps += 1
@@ -113,21 +127,22 @@ def pattern_to_regex(pattern: str):
     compiled = re.compile(full_regex)
 
     # ---- find base directory (literal prefix before first wildcard / capture) ----
-    base_dir = _extract_base_dir(s)
+    base_dir = _extract_base_dir(s, open_char)
 
     return base_dir, compiled, n_caps
 
 
-def _split_top_level(s: str, sep: str = '/'):
-    """Split s by sep, but ignore seps inside {}."""
+def _split_top_level(s: str, sep: str = '/',
+                     open_char: str = '{', close_char: str = '}'):
+    """Split *s* by *sep*, but ignore seps inside the active bracket pair."""
     tokens = []
     depth = 0
     buf = []
     for ch in s:
-        if ch == '{':
+        if ch == open_char:
             depth += 1
             buf.append(ch)
-        elif ch == '}':
+        elif ch == close_char:
             depth -= 1
             buf.append(ch)
         elif ch == sep and depth == 0:
@@ -139,20 +154,19 @@ def _split_top_level(s: str, sep: str = '/'):
     return tokens
 
 
-def _extract_base_dir(norm: str) -> str:
-    """Return the longest literal prefix path segment (no * ? {)."""
-    tokens = _split_top_level(norm, '/')
+def _extract_base_dir(norm: str, open_char: str = '{') -> str:
+    """Return the longest literal prefix path segment (no * ? or *open_char*)."""
+    close_char = '}' if open_char == '{' else ']'
+    tokens = _split_top_level(norm, '/', open_char, close_char)
 
     base_tokens = []
     for tok in tokens:
-        if any(c in tok for c in ('*', '?', '{')):
+        if any(c in tok for c in ('*', '?', open_char)):
             break
         base_tokens.append(tok)
 
     base = '/'.join(base_tokens)
 
-    # A pattern like '/{*}/...' produces base_tokens=['',''] -> base=''
-    # but since norm starts with '/' we know the base is '/'
     if not base:
         if norm.startswith('/'):
             return '/'
