@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "path-walker"
+version = "0.1.0"
+description = "Glob-like path matching with {} capture groups"
+requires-python = ">=3.9"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["path_walker*"]
