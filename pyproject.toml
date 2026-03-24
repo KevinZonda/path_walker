@@ -6,7 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "path-walker"
 version = "0.1.0"
 description = "Glob-like path matching with {} capture groups"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.9"
+keywords = ["glob", "path", "walk", "capture", "filesystem"]
+classifiers = [
+    "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

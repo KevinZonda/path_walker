@@ -200,3 +200,13 @@ path_walker/
 pip install pytest
 pytest tests/
 ```
+
+---
+
+## 许可证
+
+[GNU Lesser General Public License v2.1](LICENSE)
+
+- 闭源项目可以 `import` 并使用本库 ✅
+- 修改本库代码必须以 LGPL-2.1 开源 ✅
+- 必须保留原作者署名 ✅
